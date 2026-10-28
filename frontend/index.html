@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>StemSplit</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <main class="app">
+    <h1>StemSplit</h1>
+    <p class="subtitle">Upload a song, get vocals, drums, bass, guitar, piano &amp; other as separate tracks.</p>
+
+    <section id="dropzone" class="dropzone">
+      <p>Drag &amp; drop an audio file here, or</p>
+      <label class="file-button">
+        Choose file
+        <input id="file-input" type="file" accept="audio/*" hidden />
+      </label>
+      <p id="file-name" class="file-name"></p>
+    </section>
+
+    <button id="split-button" disabled>Split stems</button>
+
+    <section id="status" class="status" hidden>
+      <div class="spinner"></div>
+      <p id="status-text">Uploading…</p>
+    </section>
+
+    <p id="error" class="error" hidden></p>
+
+    <section id="results" class="results" hidden>
+      <h2>Stems</h2>
+      <div id="stem-list" class="stem-list"></div>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
