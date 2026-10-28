@@ -5,11 +5,25 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>StemSplit</title>
   <link rel="stylesheet" href="style.css" />
+  <script>
+    (function () {
+      try {
+        var saved = localStorage.getItem("stemsplit-theme");
+        var theme = saved || (window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark");
+        document.documentElement.dataset.theme = theme;
+      } catch (e) {}
+    })();
+  </script>
 </head>
 <body>
   <main class="app">
-    <h1>StemSplit</h1>
-    <p class="subtitle">Upload a song, get vocals, drums, bass, guitar, piano &amp; other as separate tracks.</p>
+    <header class="top-bar">
+      <div>
+        <h1>StemSplit</h1>
+        <p class="subtitle">Upload a song, get vocals, drums, bass, guitar, piano &amp; other as separate tracks.</p>
+      </div>
+      <button id="theme-toggle" class="theme-toggle" type="button" aria-label="Toggle color theme">Light</button>
+    </header>
 
     <section id="dropzone" class="dropzone">
       <p>Drag &amp; drop an audio file here, or</p>

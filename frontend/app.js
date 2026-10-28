@@ -7,9 +7,44 @@ const statusText = document.getElementById("status-text");
 const errorEl = document.getElementById("error");
 const resultsEl = document.getElementById("results");
 const stemListEl = document.getElementById("stem-list");
+const themeToggle = document.getElementById("theme-toggle");
 
 let selectedFile = null;
 let pollHandle = null;
+const activeWaveforms = [];
+
+const THEME_STORAGE_KEY = "stemsplit-theme";
+let waveformPlayedColor = "#6c8cff";
+let waveformTrackColor = "#3a3f4b";
+
+function updateWaveformColors() {
+  const styles = getComputedStyle(document.documentElement);
+  waveformPlayedColor = styles.getPropertyValue("--accent").trim() || waveformPlayedColor;
+  waveformTrackColor = styles.getPropertyValue("--waveform-track").trim() || waveformTrackColor;
+}
+
+function applyTheme(theme) {
+  document.documentElement.dataset.theme = theme;
+  themeToggle.textContent = theme === "dark" ? "Light" : "Dark";
+  updateWaveformColors();
+  activeWaveforms.forEach((redraw) => redraw());
+}
+
+function getCurrentTheme() {
+  return document.documentElement.dataset.theme === "light" ? "light" : "dark";
+}
+
+themeToggle.addEventListener("click", () => {
+  const next = getCurrentTheme() === "dark" ? "light" : "dark";
+  try {
+    localStorage.setItem(THEME_STORAGE_KEY, next);
+  } catch (err) {
+    // ignore storage failures (e.g. private browsing)
+  }
+  applyTheme(next);
+});
+
+applyTheme(getCurrentTheme());
 
 function setFile(file) {
   selectedFile = file;
@@ -109,6 +144,7 @@ function getAudioContext() {
 
 function showResults(jobId, stems) {
   stemListEl.innerHTML = "";
+  activeWaveforms.length = 0;
   stems.forEach((stem) => {
     const url = `/api/download/${jobId}/${stem}`;
 
@@ -168,6 +204,8 @@ async function setupWaveform(canvas, audio, url) {
     // Waveform is a visual extra; fall back silently to the plain <audio> element.
     return;
   }
+
+  activeWaveforms.push(() => render(audio.duration ? audio.currentTime / audio.duration : 0));
 
   audio.addEventListener("timeupdate", () => {
     render(audio.duration ? audio.currentTime / audio.duration : 0);
@@ -231,7 +269,7 @@ function drawWaveform(canvas, ctx2d, peaks, progress) {
     const barHeight = Math.max(2, peaks[i] * height);
     const x = i * barWidth;
     const y = (height - barHeight) / 2;
-    ctx2d.fillStyle = i < playedBars ? "#6c8cff" : "#3a3f4b";
+    ctx2d.fillStyle = i < playedBars ? waveformPlayedColor : waveformTrackColor;
     ctx2d.fillRect(x, y, barWidth - gap, barHeight);
   }
 }
