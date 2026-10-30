@@ -174,12 +174,33 @@ h1 {
   margin-top: 32px;
 }
 
+.results-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
 .results h2 {
   font-size: 16px;
-  margin-bottom: 12px;
+  margin: 0;
   color: var(--muted);
   text-transform: uppercase;
   letter-spacing: 0.04em;
+}
+
+.download-all-link {
+  color: var(--accent);
+  font-size: 13px;
+  text-decoration: none;
+}
+
+.download-all-link:hover {
+  text-decoration: underline;
+}
+
+.download-all-link[hidden] {
+  display: none;
 }
 
 .stem-list {
@@ -228,4 +249,81 @@ audio {
   height: 56px;
   margin-bottom: 8px;
   cursor: pointer;
+}
+
+.mixer-transport {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 16px;
+}
+
+.mixer-play-btn {
+  background: var(--accent);
+  color: #0f1115;
+  border: none;
+  border-radius: 8px;
+  padding: 8px 18px;
+  font-weight: 600;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.mixer-play-btn:hover {
+  background: var(--accent-hover);
+}
+
+.mixer-time {
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.mixer-label {
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.mixer-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.mixer-btn {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--muted);
+  border-radius: 6px;
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.mixer-btn:hover {
+  border-color: var(--accent);
+}
+
+.mixer-btn.active.mute-btn {
+  background: var(--error);
+  border-color: var(--error);
+  color: #fff;
+}
+
+.mixer-btn.active.solo-btn {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #0f1115;
+}
+
+.volume-slider {
+  flex: 1;
+  accent-color: var(--accent);
 }

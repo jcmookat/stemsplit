@@ -3,17 +3,21 @@ import os
 import re
 import shutil
 import subprocess
+import tempfile
 import threading
 import time
 import uuid
+import zipfile
 from pathlib import Path
 from typing import Optional
 
 import torch
 from fastapi import FastAPI, File, HTTPException, Request, UploadFile
+from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
+from starlette.background import BackgroundTask
 
 RANGE_HEADER_RE = re.compile(r"bytes=(\d*)-(\d*)")
 STREAM_CHUNK_SIZE = 1024 * 1024
@@ -214,6 +218,38 @@ async def download(job_id: str, stem: str, request: Request):
         media_type=media_type,
         content_disposition_type="inline",
         headers={"Accept-Ranges": "bytes"},
+    )
+
+
+def build_zip(out_dir: Path, tmp_path: Path) -> None:
+    with zipfile.ZipFile(tmp_path, "w", zipfile.ZIP_STORED) as zf:
+        for f in sorted(out_dir.iterdir()):
+            if f.is_file():
+                zf.write(f, arcname=f.name)
+
+
+@app.get("/api/download-all/{job_id}")
+async def download_all(job_id: str):
+    with jobs_lock:
+        job = jobs.get(job_id)
+    if job is None or job["status"] != "done":
+        raise HTTPException(404, "job not ready")
+
+    out_dir = OUTPUTS_DIR / MODEL_NAME / job["input_stem"]
+    if not out_dir.exists() or not any(out_dir.iterdir()):
+        raise HTTPException(404, "no files found")
+
+    tmp = tempfile.NamedTemporaryFile(suffix=".zip", delete=False)
+    tmp_path = Path(tmp.name)
+    tmp.close()
+
+    await run_in_threadpool(build_zip, out_dir, tmp_path)
+
+    return FileResponse(
+        tmp_path,
+        filename="stems.zip",
+        media_type="application/zip",
+        background=BackgroundTask(tmp_path.unlink, missing_ok=True),
     )
 
 
