@@ -209,10 +209,12 @@ function buildOriginalItem(jobId) {
   item.appendChild(canvas);
   item.appendChild(audio);
 
-  setupWaveform(canvas, audio, url, (ratio) => {
-    if (!audio.duration) return;
-    audio.currentTime = ratio * audio.duration;
-    audio.play();
+  setupWaveform(canvas, audio, url, {
+    seek: (ratio) => {
+      if (audio.duration) audio.currentTime = ratio * audio.duration;
+    },
+    isPlaying: () => !audio.paused,
+    play: () => audio.play(),
   });
 
   return item;
@@ -321,7 +323,11 @@ function buildMixerItem(jobId, stem) {
     audio.volume = Number(volume.value) / 100;
   });
 
-  setupWaveform(canvas, audio, url, mixerSeekAndPlay);
+  setupWaveform(canvas, audio, url, {
+    seek: (ratio) => seekAll(ratio),
+    isPlaying: () => mixerPlaying,
+    play: () => playAll(),
+  });
 
   return item;
 }
@@ -362,11 +368,6 @@ function seekAll(ratio) {
   mixerPlayers.forEach((p) => {
     if (p.audio.duration) p.audio.currentTime = ratio * p.audio.duration;
   });
-}
-
-function mixerSeekAndPlay(ratio) {
-  seekAll(ratio);
-  playAll();
 }
 
 function wireMixerTimekeeper() {
@@ -414,9 +415,13 @@ function formatTime(seconds) {
   return `${m}:${s}`;
 }
 
-async function setupWaveform(canvas, audio, url, onSeek) {
+async function setupWaveform(canvas, audio, url, controls) {
   const ctx2d = canvas.getContext("2d");
   let peaks = null;
+  let isDragging = false;
+  let wasPlayingAtDragStart = false;
+
+  const currentProgress = () => (audio.duration ? audio.currentTime / audio.duration : 0);
 
   const render = (progress) => {
     if (!peaks) return;
@@ -434,19 +439,69 @@ async function setupWaveform(canvas, audio, url, onSeek) {
     return;
   }
 
-  activeWaveforms.push(() => render(audio.duration ? audio.currentTime / audio.duration : 0));
+  activeWaveforms.push(() => render(currentProgress()));
 
   audio.addEventListener("timeupdate", () => {
-    render(audio.duration ? audio.currentTime / audio.duration : 0);
+    if (!isDragging) render(currentProgress());
   });
 
-  canvas.addEventListener("click", (e) => {
+  function ratioFromEvent(e) {
     const rect = canvas.getBoundingClientRect();
-    const ratio = Math.min(Math.max((e.clientX - rect.left) / rect.width, 0), 1);
-    onSeek(ratio);
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    return Math.min(Math.max((clientX - rect.left) / rect.width, 0), 1);
+  }
+
+  function handleSeek(e) {
+    const ratio = ratioFromEvent(e);
+    controls.seek(ratio);
+    render(ratio);
+  }
+
+  canvas.addEventListener("mousedown", (e) => {
+    isDragging = true;
+    wasPlayingAtDragStart = controls.isPlaying();
+    canvas.classList.add("dragging");
+    handleSeek(e);
   });
 
-  window.addEventListener("resize", () => render(audio.duration ? audio.currentTime / audio.duration : 0));
+  window.addEventListener("mousemove", (e) => {
+    if (!isDragging) return;
+    handleSeek(e);
+  });
+
+  window.addEventListener("mouseup", () => {
+    if (!isDragging) return;
+    isDragging = false;
+    canvas.classList.remove("dragging");
+    if (!wasPlayingAtDragStart) controls.play();
+  });
+
+  canvas.addEventListener(
+    "touchstart",
+    (e) => {
+      isDragging = true;
+      wasPlayingAtDragStart = controls.isPlaying();
+      handleSeek(e);
+    },
+    { passive: true }
+  );
+
+  canvas.addEventListener(
+    "touchmove",
+    (e) => {
+      if (!isDragging) return;
+      handleSeek(e);
+    },
+    { passive: true }
+  );
+
+  canvas.addEventListener("touchend", () => {
+    if (!isDragging) return;
+    isDragging = false;
+    if (!wasPlayingAtDragStart) controls.play();
+  });
+
+  window.addEventListener("resize", () => render(currentProgress()));
 }
 
 function computePeaks(audioBuffer, numBars) {
@@ -499,6 +554,13 @@ function drawWaveform(canvas, ctx2d, peaks, progress) {
     ctx2d.fillStyle = i < playedBars ? waveformPlayedColor : waveformTrackColor;
     ctx2d.fillRect(x, y, barWidth - gap, barHeight);
   }
+
+  const playheadX = Math.min(Math.max(progress, 0), 1) * width;
+  ctx2d.fillStyle = waveformPlayedColor;
+  ctx2d.fillRect(playheadX - 1, 0, 2, height);
+  ctx2d.beginPath();
+  ctx2d.arc(playheadX, 4, 4, 0, Math.PI * 2);
+  ctx2d.fill();
 }
 
 function showError(message) {

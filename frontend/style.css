@@ -249,6 +249,11 @@ audio {
   height: 56px;
   margin-bottom: 8px;
   cursor: pointer;
+  touch-action: none;
+}
+
+.waveform.dragging {
+  cursor: grabbing;
 }
 
 .mixer-transport {
