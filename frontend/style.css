@@ -287,6 +287,26 @@ audio {
   font-size: 13px;
 }
 
+.mixer-export-btn {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 8px;
+  padding: 7px 14px;
+  font-weight: 600;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.mixer-export-btn:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+
+.mixer-export-btn:disabled {
+  color: var(--muted);
+  cursor: not-allowed;
+}
+
 .mixer-label {
   margin-left: auto;
   color: var(--muted);

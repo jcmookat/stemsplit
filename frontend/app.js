@@ -15,10 +15,12 @@ let pollHandle = null;
 const activeWaveforms = [];
 
 const ORIGINAL_STEM = "original";
+const DEMUCS_SAMPLE_RATE = 44100;
 const mixerPlayers = [];
 let mixerPlaying = false;
 let mixerPlayButton = null;
 let mixerTimeEl = null;
+let mixerExportButton = null;
 let mixerDriftInterval = null;
 
 const THEME_STORAGE_KEY = "stemsplit-theme";
@@ -234,12 +236,19 @@ function buildMixerTransport() {
   mixerTimeEl.className = "mixer-time";
   mixerTimeEl.textContent = "0:00 / 0:00";
 
+  mixerExportButton = document.createElement("button");
+  mixerExportButton.type = "button";
+  mixerExportButton.className = "mixer-export-btn";
+  mixerExportButton.textContent = "Export Mix";
+  mixerExportButton.addEventListener("click", exportMix);
+
   const label = document.createElement("span");
   label.className = "mixer-label";
   label.textContent = "Mix";
 
   bar.appendChild(mixerPlayButton);
   bar.appendChild(mixerTimeEl);
+  bar.appendChild(mixerExportButton);
   bar.appendChild(label);
 
   return bar;
@@ -368,6 +377,120 @@ function seekAll(ratio) {
   mixerPlayers.forEach((p) => {
     if (p.audio.duration) p.audio.currentTime = ratio * p.audio.duration;
   });
+}
+
+async function exportMix() {
+  if (!mixerPlayers.length || !mixerExportButton) return;
+
+  const originalLabel = mixerExportButton.textContent;
+  mixerExportButton.disabled = true;
+  mixerExportButton.textContent = "Rendering…";
+
+  try {
+    const anySolo = mixerPlayers.some((p) => p.solo);
+    const sources = [];
+    // Decode at Demucs' native output rate so the mixdown doesn't get silently
+    // resampled to the browser's hardware audio rate (e.g. 48kHz) and stays
+    // sample-faithful to the original 44.1kHz/16-bit stem files.
+    const decodeCtx = new OfflineAudioContext(2, 1, DEMUCS_SAMPLE_RATE);
+
+    for (const p of mixerPlayers) {
+      const audible = anySolo ? p.solo : !p.muted;
+      const gain = audible ? p.audio.volume : 0;
+      if (gain <= 0) continue;
+      const res = await fetch(p.audio.src);
+      const arrayBuffer = await res.arrayBuffer();
+      const buffer = await decodeCtx.decodeAudioData(arrayBuffer);
+      sources.push({ buffer, gain });
+    }
+
+    if (!sources.length) {
+      showError("Nothing to export — unmute or un-solo at least one stem.");
+      return;
+    }
+
+    const numberOfChannels = Math.max(...sources.map((s) => s.buffer.numberOfChannels));
+    const sampleRate = DEMUCS_SAMPLE_RATE;
+    const length = Math.max(...sources.map((s) => s.buffer.length));
+
+    const offlineCtx = new OfflineAudioContext(numberOfChannels, length, sampleRate);
+    sources.forEach(({ buffer, gain }) => {
+      const src = offlineCtx.createBufferSource();
+      src.buffer = buffer;
+      const gainNode = offlineCtx.createGain();
+      gainNode.gain.value = gain;
+      src.connect(gainNode).connect(offlineCtx.destination);
+      src.start(0);
+    });
+
+    const rendered = await offlineCtx.startRendering();
+
+    let peak = 0;
+    for (let c = 0; c < rendered.numberOfChannels; c++) {
+      const data = rendered.getChannelData(c);
+      for (let i = 0; i < data.length; i++) {
+        const abs = Math.abs(data[i]);
+        if (abs > peak) peak = abs;
+      }
+    }
+    const normalizeFactor = peak > 1 ? 1 / peak : 1;
+
+    const blob = encodeWavPCM16(rendered, normalizeFactor);
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "custom-mix.wav";
+    link.click();
+    URL.revokeObjectURL(url);
+  } catch (err) {
+    showError(`Export failed: ${err.message}`);
+  } finally {
+    mixerExportButton.disabled = false;
+    mixerExportButton.textContent = originalLabel;
+  }
+}
+
+function encodeWavPCM16(audioBuffer, normalizeFactor) {
+  const numChannels = audioBuffer.numberOfChannels;
+  const sampleRate = audioBuffer.sampleRate;
+  const numFrames = audioBuffer.length;
+  const blockAlign = numChannels * 2;
+  const dataSize = numFrames * blockAlign;
+
+  const buffer = new ArrayBuffer(44 + dataSize);
+  const view = new DataView(buffer);
+
+  const writeString = (offset, str) => {
+    for (let i = 0; i < str.length; i++) view.setUint8(offset + i, str.charCodeAt(i));
+  };
+
+  writeString(0, "RIFF");
+  view.setUint32(4, 36 + dataSize, true);
+  writeString(8, "WAVE");
+  writeString(12, "fmt ");
+  view.setUint32(16, 16, true);
+  view.setUint16(20, 1, true);
+  view.setUint16(22, numChannels, true);
+  view.setUint32(24, sampleRate, true);
+  view.setUint32(28, sampleRate * blockAlign, true);
+  view.setUint16(32, blockAlign, true);
+  view.setUint16(34, 16, true);
+  writeString(36, "data");
+  view.setUint32(40, dataSize, true);
+
+  const channelData = [];
+  for (let c = 0; c < numChannels; c++) channelData.push(audioBuffer.getChannelData(c));
+
+  let offset = 44;
+  for (let i = 0; i < numFrames; i++) {
+    for (let c = 0; c < numChannels; c++) {
+      const sample = Math.max(-1, Math.min(1, channelData[c][i] * normalizeFactor));
+      view.setInt16(offset, sample < 0 ? sample * 0x8000 : sample * 0x7fff, true);
+      offset += 2;
+    }
+  }
+
+  return new Blob([buffer], { type: "audio/wav" });
 }
 
 function wireMixerTimekeeper() {
